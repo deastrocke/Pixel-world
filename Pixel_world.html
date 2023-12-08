@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Píxel Canvas</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            position: relative;
+        }
+
+        #pixelCanvas {
+            border: 1px solid #000;
+        }
+
+        #colorDisplay {
+            width: 50px;
+            height: 50px;
+            margin-left: 20px;
+            border: 1px solid #000;
+            position: absolute;
+            top: -60px;
+            left: 0;
+            z-index: 1;
+        }
+
+        #analogousPalette {
+            display: flex;
+            margin-top: 20px;
+        }
+
+        .analogousColor {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin-right: 5px;
+            cursor: pointer;
+        }
+
+        #waitMessage {
+            position: absolute;
+            z-index: 2;
+            display: none;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="pixelCanvas"></canvas>
+    <div id="colorDisplay"></div>
+    <div id="analogousPalette"></div>
+    <div id="waitMessage">Por favor, espera <span id="countdown">5</span> segundos antes de colocar el siguiente píxel.</div>
+    
+    <script>
+        const canvas = document.getElementById('pixelCanvas');
+        const ctx = canvas.getContext('2d');
+        const pixelSize = 10;
+        let colors = ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#00FFFF', '#FF00FF'];
+        let intensity = 10;
+        const waitMessage = document.getElementById('waitMessage');
+        let isDrawing = false;
+        let selectedColor = colors[0];
+
+        for (let i = 0; i < 10; i++) {
+            colors.push(generateRandomColor());
+        }
+
+        const areaSize = 15000;
+        const pixelsPerMeter = 100;
+
+        canvas.width = Math.sqrt(areaSize) * pixelsPerMeter;
+        canvas.height = Math.sqrt(areaSize) * pixelsPerMeter;
+
+        const colorDisplay = document.getElementById('colorDisplay');
+        const analogousPalette = document.getElementById('analogousPalette');
+
+        canvas.addEventListener('mousedown', function(event) {
+            if (!isWaiting) {
+                isDrawing = true;
+                drawPixel(event);
+            }
+        });
+
+        let isWaiting = false;
+
+        function drawPixel(event) {
+            if (isDrawing) {
+                const rect = canvas.getBoundingClientRect();
+                const x = Math.floor((event.clientX - rect.left) / pixelSize) * pixelSize;
+                const y = Math.floor((event.clientY - rect.top) / pixelSize) * pixelSize;
+                ctx.fillStyle = adjustColorIntensity(selectedColor, intensity);
+                ctx.fillRect(x, y, pixelSize, pixelSize);
+
+                colorDisplay.style.left = event.clientX + 'px';
+                colorDisplay.style.top = event.clientY - 60 + 'px';
+                colorDisplay.style.backgroundColor = adjustColorIntensity(selectedColor, intensity);
+
+                isWaiting = true;
+                waitMessage.style.left = event.clientX + 'px';
+                waitMessage.style.top = event.clientY + 'px';
+                waitMessage.style.display = 'block';
+
+                countdownTimer();
+            }
+        }
+
+        canvas.addEventListener('mouseup', function() {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('mousemove', drawPixel);
+
+        canvas.addEventListener('wheel', function(event) {
+            const direction = event.deltaY > 0 ? 1 : -1;
+            const currentIndex = colors.indexOf(selectedColor);
+            let newIndex = currentIndex + direction;
+
+            if (newIndex < 0) {
+                newIndex = colors.length - 1;
+            } else if (newIndex >= colors.length) {
+                newIndex = 0;
+            }
+
+            selectedColor = colors[newIndex];
+            colorDisplay.style.backgroundColor = adjustColorIntensity(selectedColor, intensity);
+        });
+
+        colorDisplay.style.backgroundColor = adjustColorIntensity(selectedColor, intensity);
+
+        const analogousColors = generateAnalogousColors(selectedColor);
+        analogousColors.forEach(color => {
+            const div = document.createElement('div');
+            div.className = 'analogousColor';
+            div.style.backgroundColor = color;
+            div.addEventListener('click', () => {
+                selectedColor = color;
+                colorDisplay.style.backgroundColor = adjustColorIntensity(selectedColor, intensity);
+            });
+            analogousPalette.appendChild(div);
+        });
+
+        function generateRandomColor() {
+            return '#' + Math.floor(Math.random() * 16777215).toString(16);
+        }
+
+        function adjustColorIntensity(color, intensity) {
+            const rgb = hexToRgb(color);
+            return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${intensity / 10})`;
+        }
+
+        function hexToRgb(hex) {
+            const bigint = parseInt(hex.substring(1), 16);
+            const r = (bigint >> 16) & 255;
+            const g = (bigint >> 8) & 255;
+            const b = bigint & 255;
+            return { r, g, b };
+        }
+
+        function generateAnalogousColors(color) {
+            const index = colors.indexOf(color);
+            const analogous = [];
+            for (let i = -3; i <= 3; i++) {
+                const newIndex = (index + i + colors.length) % colors.length;
+                analogous.push(colors[newIndex]);
+            }
+            return analogous;
+        }
+
+        window.addEventListener('keydown', function(event) {
+            if (event.key === '+') {
+                if (intensity < 10) {
+                    intensity++;
+                }
+            } else if (event.key === '-') {
+                if (intensity > 1) {
+                    intensity--;
+                }
+            }
+        });
+
+        function countdownTimer() {
+            let countdown = 5;
+
+            const countdownDisplay = document.getElementById('countdown');
+
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                countdownDisplay.textContent = countdown;
+
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    waitMessage.style.display = 'none';
+                    isWaiting = false; // Asegura que se restablezca después del temporizador
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
